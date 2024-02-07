@@ -4,8 +4,17 @@ import tsconfigPaths from "vite-tsconfig-paths";
 
 export default defineConfig({
   plugins: [react(), tsconfigPaths()],
-  base: "/Ch/",
   server: {
     port: 3001,
+  },
+  base: "/Ch/",
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ["react", "react-router-dom", "react-dom"],
+        },
+      },
+    },
   },
 });
