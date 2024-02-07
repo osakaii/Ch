@@ -48,6 +48,7 @@ module.exports = {
     "react/no-multi-comp": "off",
     "react/jsx-max-depth": 0,
     "react/require-default-props": "off",
+    "react/jsx-no-literals": "off",
     "unicorn/filename-case": [
       "error",
       {
