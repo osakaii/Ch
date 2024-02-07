@@ -28,4 +28,5 @@ jobs:
       - uses: actions/setup-node@v3
         with:
           node-version: "18"
-      -run: npm install -D yarn
+      -run: npm install
+      # -run: npm run lint
