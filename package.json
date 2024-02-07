@@ -2,7 +2,7 @@
   "name": "client",
   "private": true,
   "version": "0.0.0",
-  "homepage": "https://osakaii.github.io/Ch",
+  "homepage": "https://osakaii.github.io/Ch/",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
@@ -10,7 +10,7 @@
     "lint:tsc": "yarn tsc -p .",
     "lint:prettier": "prettier --check 'src/**/*.{js,jsx,ts,tsx,json,css,md}'",
     "ci": "npm-run-all --parallel lint lint:tsc lint:prettier",
-    "predeploy": "vite build",
+    "predeploy": "yarn build",
     "deploy": "gh-pages -d dist",
     "preview": "vite preview"
   },
