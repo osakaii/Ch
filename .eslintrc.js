@@ -58,6 +58,18 @@ module.exports = {
         },
       },
     ],
+    "react/jsx-no-bind": "off",
+    "react/jsx-sort-props": [
+      2,
+      {
+        callbacksLast: true,
+        shorthandFirst: false,
+        shorthandLast: true,
+        ignoreCase: true,
+        noSortAlphabetically: false,
+      },
+    ],
+    "unicorn/prevent-abbreviations": "off",
     "unicorn/prefer-query-selector": "off",
     "unicorn/prefer-spread": "off",
     "unicorn/new-for-builtins": "off",

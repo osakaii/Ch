@@ -1,0 +1,12 @@
+export { default as BBishop } from "./bB.svg?react";
+export { default as BKing } from "./bK.svg?react";
+export { default as BKnight } from "./bN.svg?react";
+export { default as BQueen } from "./bQ.svg?react";
+export { default as BRook } from "./bR.svg?react";
+export { default as BPawn } from "./bP.svg?react";
+export { default as WBishop } from "./wB.svg?react";
+export { default as WQueen } from "./wQ.svg?react";
+export { default as WKing } from "./wK.svg?react";
+export { default as WKnight } from "./wN.svg?react";
+export { default as WRook } from "./wR.svg?react";
+export { default as WPawn } from "./wP.svg?react";
