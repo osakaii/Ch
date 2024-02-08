@@ -16,10 +16,8 @@ const Square = ({ isBlack }: { isBlack?: boolean }) => {
 };
 
 const Board = () => {
-  console.log(boardSquares);
   return (
     <div className="relative">
-      <h1 className="">Chess game2</h1>
       <div className="grid grid-cols-8 border-2 border-black">
         {boardSquares.map((row, rowIndex) =>
           row.map((_, colIndex) => {
