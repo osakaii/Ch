@@ -13,6 +13,8 @@ const router = createBrowserRouter(
       <Route element={<Home />} path="/" />
     </Route>,
   ),
+  //@ts-expect-error: ok
+  { basename: import.meta.env.DEV ? "/" : "/Ch/" },
 );
 
 const Router = () => {
