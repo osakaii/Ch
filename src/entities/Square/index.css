@@ -1,0 +1,3 @@
+.takeSquareCorner {
+  @apply w-8 h-8 bg-green-800 absolute rotate-45;
+}

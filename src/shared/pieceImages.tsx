@@ -29,3 +29,4 @@ export const pieceImages = {
 };
 
 export type Piece = keyof typeof pieceImages;
+export type UncoloredPiece = "R" | "Q" | "K" | "N" | "P" | "B";
