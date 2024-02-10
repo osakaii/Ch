@@ -27,6 +27,3 @@ export const pieceImages = {
   wK: <WKing />,
   wP: <WPawn />,
 };
-
-export type Piece = keyof typeof pieceImages;
-export type UncoloredPiece = "R" | "Q" | "K" | "N" | "P" | "B";

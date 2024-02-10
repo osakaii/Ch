@@ -1,5 +1,5 @@
 import { cloneElement } from "react";
-import { Piece, pieceImages } from "shared/pieceImages";
+import { pieceImages, Piece } from "shared/Pieces";
 import { twMerge } from "tailwind-merge";
 import "./index.css";
 

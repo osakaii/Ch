@@ -1,6 +1,4 @@
-import { Piece } from "shared/pieceImages";
-
-export type BoardState = (Piece | undefined)[][];
+import { BoardState } from "./types";
 
 export const [MIN, MAX] = [0, 7];
 
@@ -20,12 +18,12 @@ export const squaresArray = Array.from(Array(8).keys()).map(() =>
 );
 
 export enum Vectors {
-  DL = "-1-1",
+  UL = "-1-1",
   D = "10",
-  DR = "-11",
+  UR = "-11",
   R = "01",
-  UR = "11",
+  DR = "11",
   U = "-10",
-  UL = "1-1",
+  DL = "1-1",
   L = "0-1",
 }
