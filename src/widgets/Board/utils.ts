@@ -6,9 +6,11 @@ import {
   WhitePiece,
   Colors,
   Pieces,
+  Position,
+  BatteryPieces,
 } from "shared/Pieces";
 import { MAX, MIN, Vectors } from "./consts";
-import { BoardState, Position } from "./types";
+import { BoardState } from "./types";
 import { uniq } from "lodash";
 
 export const posToString = ({ x, y }: Position) => String(y) + String(x);
@@ -33,13 +35,18 @@ export const uncolorPiece = (piece: Piece) => piece.slice(1) as UncoloredPiece;
 type BaseInfoForCalc = {
   position: Position;
   boardState: BoardState;
-  blackTurn: boolean;
+  piece: Piece;
+  legalMoves?: string[];
+};
+
+type GetPieceMovesArgs = BaseInfoForCalc & {
+  isXRay?: boolean;
 };
 
 type CalcMovesArgs = BaseInfoForCalc & {
+  isXRay?: boolean;
   vectors: Set<string>;
   limit?: number;
-  piece?: Piece;
 };
 
 type IsInvalidPawnMoveArgs = {
@@ -82,9 +89,10 @@ const calcMoves = ({
   vectors,
   position,
   boardState,
-  blackTurn,
   limit = Number.POSITIVE_INFINITY,
   piece,
+  legalMoves,
+  isXRay,
 }: CalcMovesArgs) => {
   const moves = [];
 
@@ -111,21 +119,21 @@ const calcMoves = ({
       for (let step = 0; step < limit; step++) {
         nextX += i;
         nextY += k;
+        const nextMove = posToString({ y: nextY, x: nextX });
 
         if (nextX < MIN || nextY < MIN || nextX > MAX || nextY > MAX) break;
 
         const nextSquare = boardState[nextY][nextX];
 
         if (isPawn && isInvalidPawnMove({ nextSquare, piece, vector })) break;
-
-        if (nextSquare) {
-          // Remove taking same color piece
-          if (isBlackPiece(nextSquare) === blackTurn) break;
-          moves.push(posToString({ y: nextY, x: nextX }));
+        if (nextSquare && isBlackPiece(piece) === isBlackPiece(nextSquare))
           break;
-        }
 
-        moves.push(posToString({ y: nextY, x: nextX }));
+        if (legalMoves && !legalMoves?.includes(nextMove)) continue;
+
+        moves.push(nextMove);
+
+        if (!isXRay && nextSquare) break;
       }
     }
   }
@@ -134,24 +142,26 @@ const calcMoves = ({
 
 const calcKnightMoves = ({
   position,
-  blackTurn,
   boardState,
+  piece,
+  legalMoves,
 }: BaseInfoForCalc) => {
   const moves = [];
   for (let i = -2; i < 3; i++) {
     for (let k = -2; k < 3; k++) {
-      // Remove non L moves
       if (Math.abs(i) === Math.abs(k) || k === 0 || i === 0) continue;
       const nextY = position.y + k;
       const nextX = position.x + i;
+      const nextMove = posToString({ y: nextY, x: nextX });
 
       if (nextX < MIN || nextY < MIN || nextX > MAX || nextY > MAX) continue;
 
       const nextSquare = boardState[nextY][nextX];
-      // Remove taking same color piece
-      if (nextSquare && blackTurn === isBlackPiece(nextSquare)) continue;
+      if (nextSquare && isBlackPiece(piece) === isBlackPiece(nextSquare))
+        continue;
+      if (legalMoves && !legalMoves?.includes(nextMove)) continue;
 
-      moves.push(posToString({ y: nextY, x: nextX }));
+      moves.push(nextMove);
     }
   }
   return moves;
@@ -164,45 +174,114 @@ const vectorOfPiece = {
   K: { vectors: new Set(Object.values(Vectors)), limit: 1 },
 };
 
-export const getPieceMoves = ({
-  piece: coloredPiece,
-  ...rest
-}: BaseInfoForCalc & { piece: Piece }) => {
-  const piece = uncolorPiece(coloredPiece);
+export const getPieceMoves = ({ piece, ...rest }: GetPieceMovesArgs) => {
+  const uncoloredPiece = uncolorPiece(piece);
 
-  if (piece === Pieces.KNIGHT)
+  if (uncoloredPiece === Pieces.KNIGHT)
     return calcKnightMoves({
+      piece,
       ...rest,
     });
 
-  if (piece === Pieces.PAWN) {
+  if (uncoloredPiece === Pieces.PAWN) {
     return calcMoves({
       vectors: new Set(
-        isBlackPiece(coloredPiece)
+        isBlackPiece(piece)
           ? [Vectors.D, Vectors.DL, Vectors.DR]
           : [Vectors.U, Vectors.UR, Vectors.UL],
       ),
       limit: 1,
-      piece: coloredPiece,
+      piece,
       ...rest,
     });
   }
 
   return calcMoves({
-    ...vectorOfPiece[piece],
+    piece,
+    ...vectorOfPiece[uncoloredPiece],
     ...rest,
   });
+};
+
+type GetPiecesMovesArgs = Omit<BaseInfoForCalc, "position" | "piece"> & {
+  pieces: Piece[];
+  isXRay: boolean;
 };
 
 export const getPiecesMoves = ({
   pieces,
   boardState,
-  blackTurn,
-}: Omit<BaseInfoForCalc, "position"> & { pieces: Piece[] }) =>
+  isXRay,
+}: GetPiecesMovesArgs) =>
   uniq(
     pieces.flatMap((piece) =>
-      getPositions({ piece, boardState }).flatMap((position) =>
-        getPieceMoves({ piece, boardState, position, blackTurn }),
-      ),
+      getPositions({ piece, boardState }).map((position) => ({
+        piece,
+        position,
+        moves: getPieceMoves({
+          piece,
+          boardState,
+          position,
+          isXRay,
+        }),
+      })),
     ),
   );
+
+export const getSquaresBetween = (pos1: Position, pos2: Position) => {
+  const { x: x1, y: y1 } = pos1;
+  const { x: x2, y: y2 } = pos2;
+
+  const squaresBetween = [];
+
+  const xVector = x1 < x2 ? 1 : -1;
+  const yVector = y1 < y2 ? 1 : -1;
+
+  let stepX = x1,
+    stepY = y1;
+
+  while (stepX !== x2 || stepY !== y2) {
+    if (stepX !== x2) stepX += xVector;
+    if (stepY !== y2) stepY += yVector;
+
+    squaresBetween.push({ x: stepX, y: stepY });
+  }
+
+  squaresBetween.pop();
+
+  return squaresBetween;
+};
+
+export const getKingAttack = (
+  boardState: BoardState,
+  blackTurn: boolean,
+  nextBoardState: BoardState,
+  piece: Piece,
+) => {
+  const possibleChecks = getPiecesMoves({
+    pieces: [...toBlack(BatteryPieces), ...toWhite(BatteryPieces), piece],
+    boardState,
+    isXRay: true,
+  });
+
+  const kingPosition = getPositions({
+    piece: blackTurn ? "wK" : "bK",
+    boardState: nextBoardState,
+  })[0];
+
+  const defendKingMoves = [];
+
+  for (const { moves, piece, position } of possibleChecks) {
+    if (moves.includes(posToString(kingPosition))) {
+      if (uncolorPiece(piece) === Pieces.KNIGHT) {
+        defendKingMoves.push(position);
+        continue;
+      }
+
+      const squaresBetween = getSquaresBetween(kingPosition, position);
+      defendKingMoves.push(...squaresBetween, position);
+    }
+  }
+
+  return [];
+};

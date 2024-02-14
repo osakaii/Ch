@@ -2,18 +2,13 @@ import { useState } from "react";
 import { boardInitialState, squaresArray } from "./consts";
 import {
   getPieceMoves,
-  getPiecesMoves,
-  getPositions,
   isBlackPiece,
   isBlackSquare,
   posToString,
-  toBlack,
-  toWhite,
 } from "./utils";
-import { Position } from "./types";
 import Square from "entities/Square/Square";
-import { clone } from "lodash";
-import { Piece, BatteryPieces, Colors } from "shared/Pieces";
+import { clone, isEmpty, isUndefined } from "lodash";
+import { Piece, Position } from "shared/Pieces";
 
 type SelectedPiece = {
   piece: Piece;
@@ -21,20 +16,36 @@ type SelectedPiece = {
   moves: string[];
 };
 
+type CheckState = {
+  king: "wK" | "bK";
+  defendKingMoves: Position[];
+};
+
 const Board = () => {
   const [boardState, setBoardState] = useState(boardInitialState);
   const [blackTurn, setBlackTurn] = useState(false);
-  const [checkState, setCheckState] = useState<Colors>();
+  const [checkState, setCheckState] = useState<CheckState>();
   const [selectedPiece, setSelectedPiece] = useState<
     SelectedPiece | undefined
   >();
 
   const onSelectPiece = (position: Position, piece: Piece) => {
-    setSelectedPiece({
+    const moves = getPieceMoves({
       piece,
       position,
-      moves: getPieceMoves({ piece, position, boardState, blackTurn }),
+      boardState,
+      legalMoves: checkState?.defendKingMoves.map((move) => posToString(move)),
     });
+
+    if (isEmpty(moves)) {
+      setSelectedPiece(undefined);
+    } else {
+      setSelectedPiece({
+        piece,
+        position,
+        moves,
+      });
+    }
   };
 
   const moveTo = ({ x, y }: Position) => {
@@ -46,28 +57,19 @@ const Board = () => {
     nextBoardState[selectedY][selectedX] = undefined;
     nextBoardState[y][x] = selectedPiece.piece;
 
-    const possibleChecks = getPiecesMoves({
-      pieces: blackTurn ? toBlack(BatteryPieces) : toWhite(BatteryPieces),
-      boardState,
-      blackTurn,
-    });
+    setCheckState(undefined);
 
-    const kingPosition = posToString(
-      getPositions({
-        piece: blackTurn ? "wK" : "bK",
-        boardState: nextBoardState,
-      })[0],
-    );
-
-    if (possibleChecks.includes(kingPosition))
-      setCheckState(blackTurn ? Colors.WHITE : Colors.BLACK);
+    // if (!isEmpty(defendKingMoves)) {
+    //   setCheckState({
+    //     king: blackTurn ? "wK" : "bK",
+    //     defendKingMoves,
+    //   });
+    // }
 
     setBoardState(nextBoardState);
     setBlackTurn((prev) => !prev);
     setSelectedPiece(undefined);
   };
-
-  console.log(checkState);
 
   const onClick = (position: Position, isAvailable: boolean, piece?: Piece) => {
     if (isAvailable) return moveTo(position);
@@ -89,11 +91,17 @@ const Board = () => {
             const piece = boardState[y][x];
             const isAvailable =
               selectedPiece?.moves.includes(posToString({ y, x })) || false;
+            const isSelectedSquare =
+              x === selectedPiece?.position.x && y === selectedPiece.position.y;
+            const isChecked =
+              !isUndefined(checkState) && checkState?.king === piece;
 
             return (
               <Square
                 isAvailable={isAvailable}
                 isBlack={isBlackSquare(y, x)}
+                isChecked={isChecked}
+                isSelectedSquare={isSelectedSquare}
                 key={key}
                 piece={piece}
                 onClick={() => onClick({ x, y }, isAvailable, piece)}
