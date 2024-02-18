@@ -1,80 +1,24 @@
-import { useState } from "react";
-import { boardInitialState, squaresArray } from "./consts";
-import {
-  getPieceMoves,
-  isBlackPiece,
-  isBlackSquare,
-  posToString,
-} from "./utils";
+import { squaresArray } from "./consts";
+import { isBlackPiece, isBlackSquare, posToString } from "./utils";
 import Square from "entities/Square/Square";
-import { clone, isEmpty, isUndefined } from "lodash";
+import { isUndefined } from "lodash";
 import { Piece, Position } from "shared/Pieces";
-
-type SelectedPiece = {
-  piece: Piece;
-  position: Position;
-  moves: string[];
-};
-
-type CheckState = {
-  king: "wK" | "bK";
-  defendKingMoves: Position[];
-};
+import useBoardStore from "./useBoardStore";
 
 const Board = () => {
-  const [boardState, setBoardState] = useState(boardInitialState);
-  const [blackTurn, setBlackTurn] = useState(false);
-  const [checkState, setCheckState] = useState<CheckState>();
-  const [selectedPiece, setSelectedPiece] = useState<
-    SelectedPiece | undefined
-  >();
-
-  const onSelectPiece = (position: Position, piece: Piece) => {
-    const moves = getPieceMoves({
-      piece,
-      position,
-      boardState,
-      legalMoves: checkState?.defendKingMoves.map((move) => posToString(move)),
-    });
-
-    if (isEmpty(moves)) {
-      setSelectedPiece(undefined);
-    } else {
-      setSelectedPiece({
-        piece,
-        position,
-        moves,
-      });
-    }
-  };
-
-  const moveTo = ({ x, y }: Position) => {
-    if (!selectedPiece) return;
-
-    const nextBoardState = clone(boardState);
-
-    const { x: selectedX, y: selectedY } = selectedPiece.position;
-    nextBoardState[selectedY][selectedX] = undefined;
-    nextBoardState[y][x] = selectedPiece.piece;
-
-    setCheckState(undefined);
-
-    // if (!isEmpty(defendKingMoves)) {
-    //   setCheckState({
-    //     king: blackTurn ? "wK" : "bK",
-    //     defendKingMoves,
-    //   });
-    // }
-
-    setBoardState(nextBoardState);
-    setBlackTurn((prev) => !prev);
-    setSelectedPiece(undefined);
-  };
+  const {
+    blackTurn,
+    boardState,
+    checkState,
+    selectedPiece,
+    setSelectedPiece,
+    moveTo,
+    onSelectPiece,
+  } = useBoardStore();
 
   const onClick = (position: Position, isAvailable: boolean, piece?: Piece) => {
     if (isAvailable) return moveTo(position);
 
-    // if clicked in unavailable square without piece or enemy piece remove selection
     if (!piece || blackTurn !== isBlackPiece(piece)) {
       setSelectedPiece(undefined);
     } else {

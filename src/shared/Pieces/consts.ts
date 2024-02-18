@@ -8,8 +8,10 @@ export enum Pieces {
 }
 
 export enum Colors {
-  BLACK = "b",
   WHITE = "w",
+  BLACK = "b",
 }
+
+export type ColorType = `${Colors}`;
 
 export const BatteryPieces = [Pieces.BISHOP, Pieces.ROOK, Pieces.QUEEN];

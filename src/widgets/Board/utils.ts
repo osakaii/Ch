@@ -1,17 +1,15 @@
 /* eslint-disable complexity */
 import {
-  BlackPiece,
   Piece,
   UncoloredPiece,
-  WhitePiece,
   Colors,
   Pieces,
   Position,
-  BatteryPieces,
+  ColorType,
 } from "shared/Pieces";
 import { MAX, MIN, Vectors } from "./consts";
-import { BoardState } from "./types";
-import { uniq } from "lodash";
+import { BoardState, PiecesUnderPressure } from "./types";
+import { clone, isArray, isEmpty, isUndefined, omit, uniq } from "lodash";
 
 export const posToString = ({ x, y }: Position) => String(y) + String(x);
 
@@ -25,10 +23,22 @@ export const isBlackPiece = (piece: Piece) => {
   return piece[0] === Colors.BLACK;
 };
 
-export const toBlack = (pieces: Pieces[]) =>
-  pieces.map((piece) => "b" + piece) as BlackPiece[];
-export const toWhite = (pieces: Pieces[]) =>
-  pieces.map((piece) => "w" + piece) as WhitePiece[];
+export const getPieceColor = (piece: Piece) => piece[0] as ColorType;
+
+const getOpositeColor = (color: ColorType) => (color === "w" ? "b" : "w");
+
+type ReturnColorPieces<T extends Pieces[] | Pieces> = T extends Pieces[]
+  ? Piece[]
+  : Piece;
+
+export const colorPieces = <T extends Pieces[] | Pieces>(
+  pieceOrPieces: T,
+  color: "w" | "b",
+): ReturnColorPieces<T> => {
+  return isArray(pieceOrPieces)
+    ? (pieceOrPieces.map((piece) => color + piece) as ReturnColorPieces<T>)
+    : ((color + pieceOrPieces) as ReturnColorPieces<T>);
+};
 
 export const uncolorPiece = (piece: Piece) => piece.slice(1) as UncoloredPiece;
 
@@ -40,26 +50,54 @@ type BaseInfoForCalc = {
 };
 
 type GetPieceMovesArgs = BaseInfoForCalc & {
+  attackedSquares?: Record<Colors, string[]>;
+  piecesUnderPressure?: PiecesUnderPressure;
+  isPawnAttacks?: boolean;
   isXRay?: boolean;
 };
 
 type CalcMovesArgs = BaseInfoForCalc & {
-  isXRay?: boolean;
+  attackedSquares?: Record<Colors, string[]>;
   vectors: Set<string>;
   limit?: number;
+  isXRay?: boolean;
+  isPawnAttacks?: boolean;
+  piecesUnderPressure?: PiecesUnderPressure;
 };
 
 type IsInvalidPawnMoveArgs = {
   nextSquare: Piece | undefined;
   piece: Piece;
   vector: string;
+  isPawnAttacks?: boolean;
+};
+
+export const getNextBoard = (
+  boardState: BoardState,
+  selectedPiece: { piece: Piece; position: Position },
+  { x, y }: Position,
+) => {
+  const nextBoardState = clone(boardState);
+
+  const { x: selectedX, y: selectedY } = selectedPiece.position;
+  nextBoardState[selectedY][selectedX] = undefined;
+  nextBoardState[y][x] = selectedPiece.piece;
+
+  return nextBoardState;
 };
 
 const isInvalidPawnMove = ({
   nextSquare,
   piece,
   vector,
+  isPawnAttacks,
 }: IsInvalidPawnMoveArgs) => {
+  if (isPawnAttacks) {
+    return (
+      (isBlackPiece(piece) && vector === Vectors.D) ||
+      (!isBlackPiece(piece) && vector === Vectors.U)
+    );
+  }
   if (!nextSquare) {
     if (isBlackPiece(piece) && vector !== Vectors.D) return true;
     if (!isBlackPiece(piece) && vector !== Vectors.U) return true;
@@ -67,6 +105,25 @@ const isInvalidPawnMove = ({
   if (nextSquare) {
     if (isBlackPiece(piece) && vector === Vectors.D) return true;
     if (!isBlackPiece(piece) && vector === Vectors.U) return true;
+  }
+};
+
+const isUnderPressure = (
+  nextSquare: Position,
+  position: Position,
+  piecesUnderPressure?: PiecesUnderPressure,
+) => {
+  if (isUndefined(piecesUnderPressure) || isEmpty(piecesUnderPressure))
+    return false;
+
+  for (const piece of piecesUnderPressure) {
+    if (
+      piece.position.x === position.x &&
+      piece.position.y === position.y &&
+      !piece.moves.includes(nextSquare)
+    ) {
+      return true;
+    }
   }
 };
 
@@ -85,20 +142,22 @@ export const getPositions = ({
   return positions;
 };
 
-const calcMoves = ({
+export const calcMoves = ({
   vectors,
   position,
   boardState,
+  piecesUnderPressure,
   limit = Number.POSITIVE_INFINITY,
   piece,
   legalMoves,
   isXRay,
+  attackedSquares,
+  isPawnAttacks,
 }: CalcMovesArgs) => {
   const moves = [];
+  const uncoloredPiece = piece && uncolorPiece(piece);
 
-  const isPawn = piece && uncolorPiece(piece) === Pieces.PAWN;
-
-  if (isPawn) {
+  if (uncoloredPiece === Pieces.PAWN) {
     if (isBlackPiece(piece) && position.y === 1) {
       limit = 2;
     }
@@ -106,6 +165,8 @@ const calcMoves = ({
       limit = 2;
     }
   }
+
+  if (uncoloredPiece === Pieces.PAWN && isPawnAttacks) limit = 1;
 
   for (let i = -1; i < 2; i++) {
     for (let k = -1; k < 2; k++) {
@@ -125,8 +186,29 @@ const calcMoves = ({
 
         const nextSquare = boardState[nextY][nextX];
 
-        if (isPawn && isInvalidPawnMove({ nextSquare, piece, vector })) break;
-        if (nextSquare && isBlackPiece(piece) === isBlackPiece(nextSquare))
+        if (
+          isUnderPressure({ x: nextX, y: nextY }, position, piecesUnderPressure)
+        )
+          continue;
+
+        if (
+          uncoloredPiece === Pieces.PAWN &&
+          isInvalidPawnMove({ nextSquare, piece, vector, isPawnAttacks })
+        )
+          break;
+
+        if (
+          uncoloredPiece === Pieces.KING &&
+          attackedSquares &&
+          attackedSquares[getPieceColor(piece)].includes(nextMove)
+        )
+          break;
+
+        if (
+          !isXRay &&
+          nextSquare &&
+          isBlackPiece(piece) === isBlackPiece(nextSquare)
+        )
           break;
 
         if (legalMoves && !legalMoves?.includes(nextMove)) continue;
@@ -140,7 +222,7 @@ const calcMoves = ({
   return moves;
 };
 
-const calcKnightMoves = ({
+export const calcKnightMoves = ({
   position,
   boardState,
   piece,
@@ -205,7 +287,7 @@ export const getPieceMoves = ({ piece, ...rest }: GetPieceMovesArgs) => {
 
 type GetPiecesMovesArgs = Omit<BaseInfoForCalc, "position" | "piece"> & {
   pieces: Piece[];
-  isXRay: boolean;
+  isXRay?: boolean;
 };
 
 export const getPiecesMoves = ({
@@ -213,19 +295,17 @@ export const getPiecesMoves = ({
   boardState,
   isXRay,
 }: GetPiecesMovesArgs) =>
-  uniq(
-    pieces.flatMap((piece) =>
-      getPositions({ piece, boardState }).map((position) => ({
+  pieces.flatMap((piece) =>
+    getPositions({ piece, boardState }).map((position) => ({
+      piece,
+      position,
+      moves: getPieceMoves({
         piece,
+        boardState,
         position,
-        moves: getPieceMoves({
-          piece,
-          boardState,
-          position,
-          isXRay,
-        }),
-      })),
-    ),
+        isXRay,
+      }),
+    })),
   );
 
 export const getSquaresBetween = (pos1: Position, pos2: Position) => {
@@ -234,15 +314,12 @@ export const getSquaresBetween = (pos1: Position, pos2: Position) => {
 
   const squaresBetween = [];
 
-  const xVector = x1 < x2 ? 1 : -1;
-  const yVector = y1 < y2 ? 1 : -1;
-
   let stepX = x1,
     stepY = y1;
 
   while (stepX !== x2 || stepY !== y2) {
-    if (stepX !== x2) stepX += xVector;
-    if (stepY !== y2) stepY += yVector;
+    if (stepX !== x2) stepX += x1 < x2 ? 1 : -1;
+    if (stepY !== y2) stepY += y1 < y2 ? 1 : -1;
 
     squaresBetween.push({ x: stepX, y: stepY });
   }
@@ -252,26 +329,46 @@ export const getSquaresBetween = (pos1: Position, pos2: Position) => {
   return squaresBetween;
 };
 
-export const getKingAttack = (
-  boardState: BoardState,
-  blackTurn: boolean,
-  nextBoardState: BoardState,
-  piece: Piece,
-) => {
-  const possibleChecks = getPiecesMoves({
-    pieces: [...toBlack(BatteryPieces), ...toWhite(BatteryPieces), piece],
-    boardState,
-    isXRay: true,
-  });
+export const getKingInfo = (nextBoardState: BoardState, color: ColorType) => {
+  const piecesWihtoutKing = Object.values(omit(Pieces, Pieces.KING));
+
+  const potentialAttackedSquares = [
+    ...colorPieces(piecesWihtoutKing, color),
+  ].flatMap((piece) =>
+    getPositions({ piece, boardState: nextBoardState }).map((position) => ({
+      piece,
+      position,
+      moves: getPieceMoves({
+        piece,
+        boardState: nextBoardState,
+        position,
+        isXRay: true,
+      }),
+    })),
+  );
+
+  const attackedSquares = uniq(
+    [...colorPieces(piecesWihtoutKing, color)].flatMap((piece) =>
+      getPositions({ piece, boardState: nextBoardState }).flatMap((position) =>
+        getPieceMoves({
+          piece,
+          boardState: nextBoardState,
+          position,
+          isPawnAttacks: true,
+        }),
+      ),
+    ),
+  );
 
   const kingPosition = getPositions({
-    piece: blackTurn ? "wK" : "bK",
+    piece: colorPieces(Pieces.KING, getOpositeColor(color)),
     boardState: nextBoardState,
   })[0];
 
   const defendKingMoves = [];
+  const piecesUnderPressure: PiecesUnderPressure = [];
 
-  for (const { moves, piece, position } of possibleChecks) {
+  for (const { moves, piece, position } of potentialAttackedSquares) {
     if (moves.includes(posToString(kingPosition))) {
       if (uncolorPiece(piece) === Pieces.KNIGHT) {
         defendKingMoves.push(position);
@@ -279,9 +376,41 @@ export const getKingAttack = (
       }
 
       const squaresBetween = getSquaresBetween(kingPosition, position);
-      defendKingMoves.push(...squaresBetween, position);
+
+      const piecesBetween = [];
+
+      for (const square of squaresBetween) {
+        const pieceOnSquare = nextBoardState[square.y][square.x];
+
+        if (pieceOnSquare)
+          piecesBetween.push({
+            piece: pieceOnSquare,
+            position: { x: square.x, y: square.y },
+          });
+      }
+
+      if (piecesBetween.length === 1) {
+        piecesUnderPressure.push({
+          moves: [...squaresBetween, position],
+          piece: piecesBetween[0].piece,
+          position: piecesBetween[0].position,
+        });
+      }
+
+      if (piecesBetween.length === 0) {
+        defendKingMoves.push(...squaresBetween, position);
+      }
     }
   }
 
-  return [];
+  return {
+    defendKingMoves,
+    piecesUnderPressure,
+    attackedSquares,
+  };
 };
+
+export const getKingsInfo = (nextBoardState: BoardState) => ({
+  [Colors.WHITE]: getKingInfo(nextBoardState, Colors.BLACK),
+  [Colors.BLACK]: getKingInfo(nextBoardState, Colors.WHITE),
+});
