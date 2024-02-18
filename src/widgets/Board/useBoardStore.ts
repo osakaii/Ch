@@ -63,8 +63,6 @@ const useBoardStore = create<State & Action>()(
           to,
         );
 
-        state.checkState = undefined;
-
         const kingsAttack = getKingsInfo(nextBoardState);
 
         mapValues(
@@ -78,12 +76,12 @@ const useBoardStore = create<State & Action>()(
             color,
           ) => {
             attackedSquares[color as Colors] = newAttackedSquares;
-            if (!isEmpty(defendKingMoves)) {
-              state.checkState = { king: color + Pieces.KING, defendKingMoves };
-            }
-            if (!isEmpty(piecesUnderPressure)) {
-              state.piecesUnderPressure = piecesUnderPressure;
-            }
+
+            state.checkState = isEmpty(defendKingMoves)
+              ? undefined
+              : { king: color + Pieces.KING, defendKingMoves };
+
+            state.piecesUnderPressure = piecesUnderPressure;
           },
         );
 
